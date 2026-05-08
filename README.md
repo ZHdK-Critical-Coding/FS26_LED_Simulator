@@ -1,5 +1,7 @@
 # Billboard Simulation
 
+[Demo](https://zhdk-critical-coding.github.io/FS26_LED_Simulator/)
+
 A p5.js sketch that simulates an LED billboard composed of a grid of panels. The simulation renders content to an off-screen graphics buffer and then displays it through a preview shader that mimics the look of physical LED subpixels (pitch, scale, glow).
 
 The project is structured so that different visual "shows" can be plugged in and switched at runtime.
