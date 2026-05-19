@@ -1,48 +1,89 @@
+/**
+ * The Preview owns its own WEBGL p5.Graphics. Its canvas is positioned
+ * fullscreen on top of the LED screen with `pointer-events: none`, so mouse
+ * clicks fall through to the LED canvas while the user sees the simulated
+ * LED look.
+ *
+ * Each frame, `update(ledCanvas)` re-uploads the LED canvas as a texture and
+ * runs the subpixel shader across a fullscreen plane.
+ */
 class Preview {
-  constructor(pitch, scale, subpixelSize) {
+  constructor(pitch, scale, subpixelSize, ledW, ledH) {
     this.pitch = pitch;
     this.scale = scale;
     this.dotSize = pitch * scale;
     this.subpixelSize = subpixelSize || 0.14;
     this.offsetX = 0;
     this.offsetY = 0;
+    this.ledW = ledW;
+    this.ledH = ledH;
+    this.gfx = null;
     this.ledShader = null;
     this.enabled = true;
+    // p5.Image is a recognised sampler2D source. It has no DOM canvas, so
+    // the visible canvas count stays at two (LED + shader).
+    this.texImage = null;
   }
 
   setup() {
-    // createShader() compiles two programs (vertex + fragment) and links them
-    // into a shader program that runs on the GPU. Unlike JavaScript which runs
-    // on the CPU once per frame, shader code runs in parallel for every single
-    // pixel on screen — that's why it's so fast.
-    this.ledShader = createShader(Preview.VERT, Preview.FRAG);
+    this.gfx = createGraphics(windowWidth, windowHeight, WEBGL);
+    this.gfx.pixelDensity(2);
+
+    const el = this.gfx.elt || this.gfx.canvas;
+    el.style.position = 'absolute';
+    el.style.left = '0';
+    el.style.top = '0';
+    el.style.width = '100vw';
+    el.style.height = '100vh';
+    el.style.zIndex = '2';
+    el.style.pointerEvents = 'none';
+    el.style.display = 'block';
+
+    this.ledShader = this.gfx.createShader(Preview.VERT, Preview.FRAG);
+    this.texImage = createImage(this.ledW, this.ledH);
   }
 
-  update(source) {
-    if (!this.enabled) return;
+  windowResized() {
+    if (this.gfx) this.gfx.resizeCanvas(windowWidth, windowHeight);
+  }
 
-    // Activate this shader for all subsequent drawing
-    shader(this.ledShader);
+  update(ledCanvas) {
+    if (!this.gfx) return;
 
-    // setUniform() sends data from JavaScript (CPU) to the shader (GPU).
-    // Uniforms are read-only constants inside the shader — they stay the same
-    // for every pixel in a single draw call. This is how we pass the source
-    // image, dimensions, and parameters into the GPU.
-    this.ledShader.setUniform("uSource", source);
-    this.ledShader.setUniform("uSourceSize", [source.width, source.height]);
-    this.ledShader.setUniform("uDotSize", this.dotSize);
-    this.ledShader.setUniform("uDisplaySize", [width, height]);
-    this.ledShader.setUniform("uSubpixelSize", this.subpixelSize);
-    this.ledShader.setUniform("uOffset", [this.offsetX, this.offsetY]);
+    if (!this.enabled) {
+      this.gfx.clear();
+      return;
+    }
 
-    // plane() draws a flat rectangle that covers the full canvas.
-    // The GPU then runs the fragment shader once for every pixel of this
-    // rectangle — each pixel independently computes its own color.
-    noStroke();
-    plane(width, height);
+    // Copy the LED canvas into the p5.Image so the shader has a recognised
+    // sampler source. drawImage on the underlying 2D context is a direct
+    // canvas-to-canvas blit — cheap for 448 × 256. setModified() tells p5
+    // the image's pixels changed so it re-uploads the GPU texture this frame
+    // (otherwise the texture would stay frozen on the first frame).
+    this.texImage.drawingContext.clearRect(0, 0, this.ledW, this.ledH);
+    this.texImage.drawingContext.drawImage(ledCanvas, 0, 0, this.ledW, this.ledH);
+    this.texImage.setModified(true);
 
-    // Switch back to p5's default shader so normal drawing works again
-    resetShader();
+    const g = this.gfx;
+    g.clear();
+    g.shader(this.ledShader);
+
+    this.ledShader.setUniform('uSource', this.texImage);
+    this.ledShader.setUniform('uSourceSize', [this.ledW, this.ledH]);
+    this.ledShader.setUniform('uDotSize', this.dotSize);
+    this.ledShader.setUniform('uDisplaySize', [g.width, g.height]);
+    this.ledShader.setUniform('uSubpixelSize', this.subpixelSize);
+    this.ledShader.setUniform('uOffset', [this.offsetX, this.offsetY]);
+
+    g.noStroke();
+    g.plane(g.width, g.height);
+    g.resetShader();
+  }
+
+  setVisible(visible) {
+    if (!this.gfx) return;
+    const el = this.gfx.elt || this.gfx.canvas;
+    el.style.display = visible ? 'block' : 'none';
   }
 }
 

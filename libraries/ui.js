@@ -1,6 +1,7 @@
 class UI {
-  constructor(source, preview) {
-    this.source = source;
+  // ledCanvasEl is the HTMLCanvasElement of the main p5 canvas (the LED screen).
+  constructor(ledCanvasEl, preview) {
+    this.ledCanvasEl = ledCanvasEl;
     this.preview = preview;
     this.frameX = 0;
     this.frameY = 0;
@@ -11,7 +12,9 @@ class UI {
 
   setup() {
     this.visible = true;
-    this.showCanvas = true;
+    this.showShader = true;     // shader preview visibility
+    this.showCanvas = true;     // LED preview canvas visibility
+
     let container = createDiv();
     this.container = container;
     container.style('position', 'absolute');
@@ -53,12 +56,20 @@ class UI {
     this.fullscreenCheckbox = this._addCheckbox(container, 'Fullscreen <span style="color:green">[ctrl-f]</span>', false, (checked) => {
       fullscreen(checked);
     });
-    this.shaderCheckbox = this._addCheckbox(container, 'LED simulator <span style="color:green">[ctrl-s]</span>', this.preview.enabled, (checked) => {
+    this.shaderCheckbox = this._addCheckbox(container, 'LED simulator <span style="color:green">[ctrl-s]</span>', this.showShader, (checked) => {
+      this.showShader = checked;
       this.preview.enabled = checked;
+      this.preview.setVisible(checked);
     });
-    this.canvasCheckbox = this._addCheckbox(container, 'LED output <span style="color:green">[ctrl-l]</span>', this.showCanvas, (checked) => {
+    this.canvasCheckbox = this._addCheckbox(container, 'LED preview <span style="color:green">[ctrl-l]</span>', this.showCanvas, (checked) => {
       this.showCanvas = checked;
+      this._applyCanvasVisibility();
     });
+  }
+
+  _applyCanvasVisibility() {
+    if (!this.ledCanvasEl) return;
+    this.ledCanvasEl.style.display = this.showCanvas ? 'block' : 'none';
   }
 
   _enableDrag(container, handle) {
@@ -71,7 +82,6 @@ class UI {
     handle.elt.addEventListener('mousedown', (e) => {
       dragging = true;
       let rect = container.elt.getBoundingClientRect();
-      // Switch from right-anchored to left-anchored on first drag
       container.style('right', 'auto');
       container.style('left', rect.left + 'px');
       container.style('top', rect.top + 'px');
@@ -112,13 +122,16 @@ class UI {
   }
 
   toggleShader() {
-    this.preview.enabled = !this.preview.enabled;
-    this.shaderCheckbox.checked(this.preview.enabled);
+    this.showShader = !this.showShader;
+    this.preview.enabled = this.showShader;
+    this.preview.setVisible(this.showShader);
+    this.shaderCheckbox.checked(this.showShader);
   }
 
   toggleCanvas() {
     this.showCanvas = !this.showCanvas;
-    this.canvasCheckbox.checked(this.showCanvas);
+    this._applyCanvasVisibility();
+    if (this.canvasCheckbox) this.canvasCheckbox.checked(this.showCanvas);
   }
 
   setExample(index, total, name) {
@@ -150,16 +163,20 @@ class UI {
     return slider;
   }
 
+  // The selectable "frame" indicates which region of the LED canvas the
+  // shader is currently showing. Its size in LED pixels depends on how much
+  // of the LED canvas fits on screen at the current dotSize.
   _frameSize() {
     let dotSize = this.preview.dotSize;
-    let w = Math.min(Math.floor(width / dotSize), this.source.width);
-    let h = Math.min(Math.floor(height / dotSize), this.source.height);
+    let w = Math.min(Math.floor(windowWidth / dotSize), this.preview.ledW);
+    let h = Math.min(Math.floor(windowHeight / dotSize), this.preview.ledH);
     return { w, h };
   }
 
   mousePressed(mx, my) {
     if (!this.visible) return;
     let f = this._frameSize();
+    // mx, my are already in LED pixels (main canvas is CSS-scaled to window)
     if (mx >= this.frameX && mx <= this.frameX + f.w &&
         my >= this.frameY && my <= this.frameY + f.h) {
       this.dragging = true;
@@ -171,8 +188,8 @@ class UI {
   mouseDragged(mx, my) {
     if (!this.dragging) return;
     let f = this._frameSize();
-    this.frameX = constrain(mx - this.dragOffsetX, 0, this.source.width - f.w);
-    this.frameY = constrain(my - this.dragOffsetY, 0, this.source.height - f.h);
+    this.frameX = constrain(mx - this.dragOffsetX, 0, this.preview.ledW - f.w);
+    this.frameY = constrain(my - this.dragOffsetY, 0, this.preview.ledH - f.h);
   }
 
   mouseReleased() {
@@ -186,7 +203,7 @@ class UI {
   }
 
   draw() {
-    // Update preview from sliders
+    // Sync slider values into the preview
     this.preview.pitch = this.pitchSlider.value();
     this.preview.scale = this.scaleSlider.value();
     this.preview.dotSize = this.preview.pitch * this.preview.scale;
@@ -196,25 +213,19 @@ class UI {
     this.scaleSlider._valueLabel.html(this.scaleSlider.value());
     this.subpixelSlider._valueLabel.html(this.subpixelSlider.value());
 
-    // Sync frame position to preview offset
+    // Frame -> shader offset
     this.preview.offsetX = this.frameX;
     this.preview.offsetY = this.frameY;
 
-    // Red frame showing visible LED area
+    // Red frame on the main canvas (the LED screen). This sits on top of the
+    // example content for one frame; the shader will then display it the
+    // next pass. Same one-frame behavior as before — acceptable as a UI hint.
     if (this.visible) {
       let f = this._frameSize();
-      this.source.noFill();
-      this.source.stroke(255, 0, 0);
-      this.source.strokeWeight(1);
-      this.source.rect(floor(this.frameX), floor(this.frameY), ceil(f.w), ceil(f.h));
-    }
-
-    // Source overlay
-    if (this.showCanvas) {
-      push();
-      translate(-width / 2, -height / 2);
-      image(this.source, 0, 0);
-      pop();
+      noFill();
+      stroke(255, 0, 0);
+      strokeWeight(1);
+      rect(floor(this.frameX), floor(this.frameY), ceil(f.w) - 1, ceil(f.h) - 1);
     }
   }
 }

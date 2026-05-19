@@ -14,33 +14,24 @@
 //
 //
 // ---------------------------------------------------------------------------
-// THE `led` GLOBAL — read this carefully
+// JUST A REGULAR p5 SKETCH
 // ---------------------------------------------------------------------------
-// `led` is NOT the screen you see in your browser window. It is a small,
-// hidden off-screen canvas whose size matches the LED billboard
-// (e.g. 448 × 256 pixels — one pixel per physical LED). The framework then
-// reads this small canvas and renders it as the simulated LED panel you see.
+// Inside setup() and draw() you use plain p5 functions exactly like in the
+// p5.js editor — no `led.` prefix, no special API:
 //
-// This means: ALL of your drawing must go to `led`, not to the main canvas.
+//     background(0);
+//     fill(255, 0, 0);
+//     noStroke();
+//     circle(20, 20, 10);
+//     rect(5, 5, 30, 30);
 //
-//   GOOD:  led.background(0)        led.fill(255, 0, 0)
-//          led.circle(20, 20, 10)   led.rect(5, 5, 30, 30)
+// `width` and `height` give you the size of the LED panel (e.g. 448 × 256).
+// The mouse coordinates passed to mousePressed(mx, my) etc. are in LED pixels.
+// Everything you draw lands on the LED buffer and is then displayed through
+// the simulator shader.
 //
-//   BAD :  background(0)            fill(255, 0, 0)
-//          circle(20, 20, 10)       rect(5, 5, 30, 30)
-//
-// The "bad" calls would draw on the main browser canvas — invisible behind
-// the simulation, and ignored by the LED preview. Always prefix p5 drawing
-// calls with `led.` inside this class.
-//
-// `led` is a p5.Graphics object, which means every p5 drawing function works
-// on it: led.fill, led.stroke, led.circle, led.rect, led.line, led.image,
-// led.push / led.pop, led.translate, led.rotate, led.text, led.blendMode, ...
-// You can also read led.width and led.height to know the panel size.
-//
-// Math/utility functions like random(), constrain(), map(), sin(), millis()
-// are NOT drawing functions — they don't go through `led`. Just call them
-// directly.
+// The framework is the one that calls createCanvas() for you — you should NOT
+// call it yourself. Just write your drawing logic inside the methods below.
 //
 //
 // ---------------------------------------------------------------------------
@@ -55,7 +46,7 @@
 // piece of state that needs to survive between frames lives on `this`:
 //
 //     setup() { this.x = 0; }
-//     draw()  { this.x = this.x + 1; led.circle(this.x, 50, 10); }
+//     draw()  { this.x = this.x + 1; circle(this.x, 50, 10); }
 //
 // `this` refers to the current instance of the class — your show. So
 // `this.x` means "the variable x that belongs to this show". Each show has
@@ -80,28 +71,25 @@ class Plain {
   // in draw().
   setup() {
     // Example:
-    // this.x = led.width / 2;
-    // this.y = led.height / 2;
+    // this.x = width / 2;
+    // this.y = height / 2;
   }
 
-  // draw() runs every frame (~60 fps). Whatever you draw on `led` here is
-  // what shows up on the LED billboard for this frame.
-  //
-  // Note: the framework already clears `led` to black before draw() runs,
-  // so unless you want a different background, you don't need to clear it
-  // yourself. If you want a solid colour, call led.background(...).
+  // draw() runs every frame (~60 fps). Whatever you draw here is what shows
+  // up on the LED billboard for this frame. Start with background(...) if
+  // you want a clean slate; otherwise the previous frame stays.
   draw() {
-    led.background('magenta');
+    background('magenta');
 
     // Example:
-    // led.fill(255);
-    // led.noStroke();
-    // led.circle(this.x, this.y, 10);
+    // fill(255);
+    // noStroke();
+    // circle(this.x, this.y, 10);
   }
 
   // ---- Optional input + lifecycle hooks ---------------------------------
   // Delete the ones you don't need, or fill them in with your own logic.
-  // mx / my are mouse coordinates in main-canvas pixels (NOT led pixels).
+  // mx / my are mouse coordinates in LED pixels.
 
   windowResized() {}      // browser window changed size
   mousePressed(mx, my) {} // mouse button went down

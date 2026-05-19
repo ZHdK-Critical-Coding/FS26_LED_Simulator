@@ -3,11 +3,11 @@
  *  Matrix & Panel Configuration
  * ──────────────────────────────────────────────────────────────────────────────
  *
- * - `matrix`   : physical LED matrix dimensions (wide x tall).
- * - `panel`    : how the matrix is partitioned into panels (columns × rows).
- * - `pitch`    : distance in pixels between the centre of each LED.
- * - `scale`    : scaling factor applied when rendering the preview.
- * - `subpixelSize` : size of the tiny sub‑pixel dots used for smooth preview.
+ * - `matrix`       : physical LED matrix dimensions (wide × tall).
+ * - `panel`        : how the matrix is partitioned into panels (columns × rows).
+ * - `pitch`        : distance in pixels between the centre of each LED.
+ * - `scale`        : scaling factor applied when rendering the preview.
+ * - `subpixelSize` : size of the tiny sub-pixel dots used for smooth preview.
  */
 const matrix = { x: 64, y: 32 };
 const panel = { column: 7, row: 8 };
@@ -15,33 +15,36 @@ const pitch = 6;
 const scale = 3.2;
 const subpixelSize = 0.2;
 
+const LED_W = matrix.x * panel.column;
+const LED_H = matrix.y * panel.row;
+
 /**
- * Global objects used throughout the sketch.
+ * Architecture — two canvases on the page
+ * ────────────────────────────────────────
+ *  - LED canvas (`createCanvas(LED_W, LED_H)`): the main p5 canvas, pinned
+ *    to the window's top-left at its native 1:1 resolution. Examples are
+ *    plain p5 sketches — `background()`, `fill()`, `circle()`, `image()`,
+ *    `text()` all draw straight onto this canvas with no `led.` prefix and
+ *    no renderer swapping. p5's normal canvas-bound mouse listeners deliver
+ *    `mouseX` / `mouseY` in LED pixels.
+ *  - Shader preview (`createGraphics(windowWidth, windowHeight, WEBGL)`):
+ *    fullscreen behind the LED canvas, with `pointer-events: none` so it
+ *    stays purely visual. Each frame it samples the LED canvas as a texture
+ *    and renders the simulated LED look across the whole window.
  *
- * @type {p5.Graphics|null}
- * @type {Preview|null}
- * @type {Example|null}
- * @type {UI|null}
+ *  The LED-preview toggle simply hides/shows the LED canvas. The shader
+ *  toggle hides/shows the WEBGL preview.
  */
-let led;
+
 let preview;
 let example;
 let ui;
 let ctrl;
+let pInst;
+let ledCanvasEl;     // the HTMLCanvasElement of the LED screen
 
-/**
- * Index of the currently playing example.
- */
 let current_show = 0;
 
-/**
- * Fade transition state.
- * - `fading`   : true when a transition is in progress.
- * - `fadepoint`: true only during the first frame of a transition.
- * - `fadeopacity`: current alpha level of the fade overlay.
- * - `fadedelta`: change in opacity per frame.
- * - `nextExample`: the index of the example that will be loaded next.
- */
 let fading = false;
 let fadepoint = 0;
 let fadeopacity = 0;
@@ -49,43 +52,62 @@ let fadedelta;
 let nextExample;
 
 /* ========================================================================== */
-/*  Setup & Teardown                                                            */
+/*  Setup                                                                       */
 /* ========================================================================== */
 
-/**
- * p5.js callback ― called once when the sketch starts.
- * Initialises the canvas, the LED buffer, the preview engine, UI, and loads
- * the first example.
- *
- * @see https://p5js.org/reference/#/p5/setup
- */
 function setup() {
-  createCanvas(windowWidth, windowHeight, WEBGL); // full‑screen 3D canvas
-  setAttributes('antialias', false);             // anti‑alias must be set before
-  noSmooth();                                    // disable smoothing
-  pixelDensity(2);                               // retina/HiDPI support
+  pInst = this;
 
-  // Render buffer for the LED matrix (Chad of 64 × 32 pixels times panels)
-  led = createGraphics(matrix.x * panel.column, matrix.y * panel.row);
+  // ── Main canvas: the LED screen ─────────────────────────────────────────
+  const c = createCanvas(LED_W, LED_H);
+  pixelDensity(1);
+  noSmooth();
 
-  // Preview draws a scaled representation of the matrix onto the screen
-  preview = new Preview(pitch, scale, subpixelSize);
+  // Locate the underlying HTMLCanvasElement (p5 1.x vs 2.x expose it
+  // differently). We need a real <canvas> for CSS styling and for the
+  // shader pass to copy from via drawImage.
+  ledCanvasEl =
+    (c && c.canvas instanceof HTMLCanvasElement && c.canvas) ||
+    (c && c.elt instanceof HTMLCanvasElement && c.elt) ||
+    (c instanceof HTMLCanvasElement && c) ||
+    document.querySelector('canvas');
+
+  // The LED canvas is a reference panel pinned to the window's top-left at
+  // native 1:1 resolution and stacked above the shader. It captures mouse
+  // events (the shader canvas above sets pointer-events: none), so p5's
+  // built-in mouseX/mouseY are LED-pixel coords — exactly what students
+  // expect when writing a standard p5 sketch.
+  ledCanvasEl.style.position = 'absolute';
+  ledCanvasEl.style.left = '0';
+  ledCanvasEl.style.top = '0';
+  ledCanvasEl.style.zIndex = '3';
+  ledCanvasEl.style.imageRendering = 'pixelated';
+
+  // ── Shader Preview: its own WEBGL graphics, fullscreen on top ───────────
+  preview = new Preview(pitch, scale, subpixelSize, LED_W, LED_H);
   preview.setup();
 
-  // UI overlays (fullscreen, shader toggle, etc.)
-  ui = new UI(led, preview);
+  // ── UI overlay ──────────────────────────────────────────────────────────
+  ui = new UI(ledCanvasEl, preview);
   ui.setup();
 
-  // Load the first example
   loadExample(current_show);
 }
 
-/**
- * Helper that safely calls a method on the active `example`.
- *
- * @param {string} method Name of the method to invoke.
- * @param {...any} args   Arguments forwarded to the method.
+/* ========================================================================== */
+/*  Mouse handling                                                              */
+/* ========================================================================== */
+/*
+ * Mouse events are p5's standard canvas-bound listeners on the LED canvas.
+ * `mouseX` / `mouseY` arrive already in LED-pixel coords (the LED canvas is
+ * displayed at native 1:1 resolution), so no translation is needed and
+ * students see plain p5 behavior.
  */
+
+/* ========================================================================== */
+/*  Show loading & fade transition                                              */
+/* ========================================================================== */
+
 function callExample(method, ...args) {
   if (!example || typeof example[method] !== 'function') return;
   try {
@@ -95,121 +117,91 @@ function callExample(method, ...args) {
   }
 }
 
-/**
- * Public API for requesting a new example.
- *
- * The transition is performed with a fade‑out/fade‑in effect. If a
- * transition is already in progress, the call is ignored.
- *
- * @param {number} index Index of the example to show next.
- */
 function loadExample(index) {
-  if (fading === true) return;           // ignore if already fading
+  if (fading === true) return;
   fading = true;
-  fadepoint = true;                      // will trigger the fade‑in loop
+  fadepoint = true;
   nextExample = index;
 }
 
-/**
- * Internal function that actually swaps out the old example.
- *
- * @private
- * @param {number} index Index of the example to load.
- */
 function _loadExample(index) {
   const total = (window.shows || []).length;
   if (total === 0) return;
 
-  // Normalise index to a valid range
   current_show = ((index % total) + total) % total;
 
-  // Clean up the current example if one is already active
   if (example) {
     callExample('cleanup');
     example = null;
   }
 
-  // Clear the LED buffer and instantiate the next example
-  led.clear();
+  clear();
   const Ctor = window.shows[current_show];
-  example = new Ctor(led);
+  example = new Ctor();
 
-  // Call the usual setup routine for the example
   callExample('setup');
-
-  // Inform the UI of the currently loaded example
   ui.setExample(current_show, total, Ctor.name);
 }
 
 /* ========================================================================== */
-/*  Main Render Loop                                                            */
+/*  Main render loop                                                            */
 /* ========================================================================== */
 
-/**
- * p5.js callback – runs on every frame.
- * It clears the screen, renders the current example, applies fade
- * transitions, updates the preview, and finally draws UI elements.
- *
- * @see https://p5js.org/reference/#/p5/draw
- */
 function draw() {
-  clear();                  // clear WebGL canvas
-  led.background(0);         // black background on the LED buffer
-  callExample('draw');      // delegate animation logic to the active example
+  // The example draws onto the main canvas (the LED screen) using plain p5.
+  callExample('draw');
 
-  // ---------- Fade Transition ----------
+  // Fade transition is drawn on the same canvas the example used.
   if (fading === true) {
-    // Initial frame – start the fade‑in
     if (fadepoint === true) {
       fadeopacity = 0;
       fadedelta = 10;
-      console.log('start');
       fadepoint = false;
     }
 
-    // Draw a semi‑transparent black rectangle over the LED buffer
-    led.fill(0, 0, 0, fadeopacity);
-    led.rect(0, 0, led.width, led.height);
+    push();
+    noStroke();
+    fill(0, 0, 0, fadeopacity);
+    rect(0, 0, width, height);
+    pop();
 
-    // Increment the fade opacity
     fadeopacity += fadedelta;
-
-    // When fully opaque, swap the example
     if (fadeopacity > 255) {
-      fadedelta *= -1;                 // reverse direction to fade‑out
+      fadedelta *= -1;
       fadeopacity = 255;
-      _loadExample(nextExample);       // swap example
+      _loadExample(nextExample);
     }
-
-    // When fully transparent, end transition
     if (fadeopacity < 0) {
       fading = false;
       fadeopacity = 0;
-      console.log('stop');
     }
   }
 
-  // ---------- Preview & UI ----------
-  preview.update(led); // render the LED buffer to the preview canvas
-  ui.draw();            // draw UI controls
+  // Shader pass first — samples the LED canvas BEFORE the UI overlays its
+  // red selection frame, so the frame stays a clean 1-pixel indicator on the
+  // LED preview and is never piped through the simulator.
+  preview.update(ledCanvasEl);
+
+  // UI's red frame drawn last, only visible on the LED preview canvas.
+  ui.draw();
 }
 
 /* ========================================================================== */
-/*  Input Event Handlers                                                       */
+/*  Input event handlers                                                        */
 /* ========================================================================== */
 
 function mousePressed() {
-  ui.mousePressed(mouseX, mouseY);
+  if (ui) ui.mousePressed(mouseX, mouseY);
   callExample('mousePressed', mouseX, mouseY);
 }
 
 function mouseDragged() {
-  ui.mouseDragged(mouseX, mouseY);
+  if (ui) ui.mouseDragged(mouseX, mouseY);
   callExample('mouseDragged', mouseX, mouseY);
 }
 
 function mouseReleased() {
-  ui.mouseReleased();
+  if (ui) ui.mouseReleased();
   callExample('mouseReleased', mouseX, mouseY);
 }
 
@@ -217,46 +209,32 @@ function mouseMoved() {
   callExample('mouseMoved', mouseX, mouseY);
 }
 
-/**
- * Detects key presses that trigger global UI actions or advance the example.
- *
- * @param {KeyboardEvent} e
- */
 function keyPressed() {
   if (key === CONTROL) {
-    ctrl = true
-    return
+    ctrl = true;
+    return;
   }
   if (ctrl === true) {
-    if (key === 'm') {
-      ui.toggle();            // show/hide UI
-    }
-    if (key === 'f') {
-      ui.toggleFullscreen();  // toggle full‑screen mode
-    }
-    if (key === 's') {
-      ui.toggleShader();      // enable/disable shader
-    }
-    if (key === 'l') {
-      ui.toggleCanvas();      // show/hide preview graph
-    }
+    if (key === 'm') ui.toggle();
+    if (key === 'f') ui.toggleFullscreen();
+    if (key === 's') ui.toggleShader();
+    if (key === 'l') ui.toggleCanvas();
     return;
   }
   if (key === ENTER) {
-    loadExample(current_show + 1); // next example
+    loadExample(current_show + 1);
     return;
   }
   callExample('keyPressed', key);
 }
 
 function keyReleased() {
-  if (key === CONTROL) {
-    ctrl = false
-  }
+  if (key === CONTROL) ctrl = false;
   callExample('keyReleased', key);
 }
 
 function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
+  // Main canvas keeps LED dimensions; only the CSS stretches to the window.
+  if (preview) preview.windowResized();
   callExample('windowResized');
 }
