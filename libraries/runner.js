@@ -27,6 +27,7 @@ let led;
 let preview;
 let example;
 let ui;
+let ctrl;
 
 /**
  * Index of the currently playing example.
@@ -222,10 +223,25 @@ function mouseMoved() {
  * @param {KeyboardEvent} e
  */
 function keyPressed() {
-  if (key === 'm') ui.toggle();            // show/hide UI
-  if (key === 'f') ui.toggleFullscreen();  // toggle full‑screen mode
-  if (key === 's') ui.toggleShader();      // enable/disable shader
-  if (key === 'l') ui.toggleCanvas();      // show/hide preview graph
+  if (key === CONTROL) {
+    ctrl = true
+    return
+  }
+  if (ctrl === true) {
+    if (key === 'm') {
+      ui.toggle();            // show/hide UI
+    }
+    if (key === 'f') {
+      ui.toggleFullscreen();  // toggle full‑screen mode
+    }
+    if (key === 's') {
+      ui.toggleShader();      // enable/disable shader
+    }
+    if (key === 'l') {
+      ui.toggleCanvas();      // show/hide preview graph
+    }
+    return;
+  }
   if (key === ENTER) {
     loadExample(current_show + 1); // next example
     return;
@@ -234,6 +250,9 @@ function keyPressed() {
 }
 
 function keyReleased() {
+  if (key === CONTROL) {
+    ctrl = false
+  }
   callExample('keyReleased', key);
 }
 

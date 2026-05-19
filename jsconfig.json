@@ -5,6 +5,6 @@
   "include": [
     "*.js",
     "**/*.js",
-    "p5.d.ts"
+    ".vscode/global.d.ts"
   ]
 }

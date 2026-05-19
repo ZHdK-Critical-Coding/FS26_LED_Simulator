@@ -1,5 +1,5 @@
 // ===========================================================================
-// PIXEL FONT — waterfall of typed text in a tiny pixel font
+// PIXEL FONT
 // ===========================================================================
 // Type letters/digits/space to extend the string, Backspace to delete.
 // (Enter is reserved by the framework to switch shows.)

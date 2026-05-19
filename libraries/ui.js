@@ -27,7 +27,7 @@ class UI {
     container.style('-webkit-backdrop-filter', 'blur(12px)');
     container.style('border-radius', '6px');
 
-    let handle = createDiv('&#x2630; drag');
+    let handle = createDiv('&#x2630; LED Simulation');
     handle.parent(container);
     handle.style('cursor', 'move');
     handle.style('user-select', 'none');
@@ -46,17 +46,17 @@ class UI {
     this.scaleSlider = this._addSlider(container, 'Screen Adjust (scale)', 1, 5, this.preview.scale, 0.01);
     this.subpixelSlider = this._addSlider(container, 'Subpixel Size', 0.05, 0.45, this.preview.subpixelSize, 0.01);
 
-    this.menuCheckbox = this._addCheckbox(container, 'GUI <span style="color:green;">[m]</span>', this.visible, (checked) => {
+    this.menuCheckbox = this._addCheckbox(container, 'GUI <span style="color:green;">[ctrl-m]</span>', this.visible, (checked) => {
       this.visible = checked;
       this.container.style('display', checked ? 'block' : 'none');
     });
-    this.fullscreenCheckbox = this._addCheckbox(container, 'Fullscreen <span style="color:green">[f]</span>', false, (checked) => {
+    this.fullscreenCheckbox = this._addCheckbox(container, 'Fullscreen <span style="color:green">[ctrl-f]</span>', false, (checked) => {
       fullscreen(checked);
     });
-    this.shaderCheckbox = this._addCheckbox(container, 'LED simulator <span style="color:green">[s]</span>', this.preview.enabled, (checked) => {
+    this.shaderCheckbox = this._addCheckbox(container, 'LED simulator <span style="color:green">[ctrl-s]</span>', this.preview.enabled, (checked) => {
       this.preview.enabled = checked;
     });
-    this.canvasCheckbox = this._addCheckbox(container, 'LED output <span style="color:green">[l]</span>', this.showCanvas, (checked) => {
+    this.canvasCheckbox = this._addCheckbox(container, 'LED output <span style="color:green">[ctrl-l]</span>', this.showCanvas, (checked) => {
       this.showCanvas = checked;
     });
   }

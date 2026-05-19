@@ -28,12 +28,12 @@ class Preview {
     // Uniforms are read-only constants inside the shader — they stay the same
     // for every pixel in a single draw call. This is how we pass the source
     // image, dimensions, and parameters into the GPU.
-    this.ledShader.setUniform('uSource', source);
-    this.ledShader.setUniform('uSourceSize', [source.width, source.height]);
-    this.ledShader.setUniform('uDotSize', this.dotSize);
-    this.ledShader.setUniform('uDisplaySize', [width, height]);
-    this.ledShader.setUniform('uSubpixelSize', this.subpixelSize);
-    this.ledShader.setUniform('uOffset', [this.offsetX, this.offsetY]);
+    this.ledShader.setUniform("uSource", source);
+    this.ledShader.setUniform("uSourceSize", [source.width, source.height]);
+    this.ledShader.setUniform("uDotSize", this.dotSize);
+    this.ledShader.setUniform("uDisplaySize", [width, height]);
+    this.ledShader.setUniform("uSubpixelSize", this.subpixelSize);
+    this.ledShader.setUniform("uOffset", [this.offsetX, this.offsetY]);
 
     // plane() draws a flat rectangle that covers the full canvas.
     // The GPU then runs the fragment shader once for every pixel of this
